@@ -1,76 +1,65 @@
-## Data download and unzip 
+# %>% comes from magrittr 
 
-# string variables for file download
-fileName <- "UCIdata.zip"
-url <- "http://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
-dir <- "UCI HAR Dataset"
+# Importing the file
 
-# File download verification. If file does not exist, download to working directory.
-if(!file.exists(fileName)){
-        download.file(url,fileName, mode = "wb") 
-}
+#importing the files for labels if needed
 
-# File unzip verification. If the directory does not exist, unzip the downloaded file.
-if(!file.exists(dir)){
-	unzip("UCIdata.zip", files = NULL, exdir=".")
-}
+features <- read.table('features.txt',col.names = c("n","function"))
+activity_labels <- read.table('activity_labels.txt',col.names = c("n","activity"))
 
 
-## Read Data
-subject_test <- read.table("UCI HAR Dataset/test/subject_test.txt")
-subject_train <- read.table("UCI HAR Dataset/train/subject_train.txt")
-X_test <- read.table("UCI HAR Dataset/test/X_test.txt")
-X_train <- read.table("UCI HAR Dataset/train/X_train.txt")
-y_test <- read.table("UCI HAR Dataset/test/y_test.txt")
-y_train <- read.table("UCI HAR Dataset/train/y_train.txt")
+# importing the test files 
 
-activity_labels <- read.table("UCI HAR Dataset/activity_labels.txt")
-features <- read.table("UCI HAR Dataset/features.txt")  
-
-## Analysis
-# 1. Merges the training and the test sets to create one data set.
-dataSet <- rbind(X_train,X_test)
-
-# 2. Extracts only the measurements on the mean and standard deviation for each measurement. 
-# Create a vector of only mean and std, use the vector to subset.
-MeanStdOnly <- grep("mean()|std()", features[, 2]) 
-dataSet <- dataSet[,MeanStdOnly]
+x_test <- read.table('test/x_test.txt',col.names = features$function.)
+y_test <- read.table('test/y_test.txt',col.names = "n")
+subject_test <- read.table('test/subject_test.txt',col.names = "subject")
 
 
-# 4. Appropriately labels the data set with descriptive activity names.
-# Create vector of "Clean" feature names by getting rid of "()" apply to the dataSet to rename labels.
-CleanFeatureNames <- sapply(features[, 2], function(x) {gsub("[()]", "",x)})
-names(dataSet) <- CleanFeatureNames[MeanStdOnly]
 
-# combine test and train of subject data and activity data, give descriptive lables
-subject <- rbind(subject_train, subject_test)
-names(subject) <- 'subject'
-activity <- rbind(y_train, y_test)
-names(activity) <- 'activity'
-
-# combine subject, activity, and mean and std only data set to create final data set.
-dataSet <- cbind(subject,activity, dataSet)
+# importing the train files
+x_train <- read.table('train/x_train.txt',col.names = features$function.)
+y_train <- read.table('train/y_train.txt',col.names = "n")
+subject_train <- read.table('train/subject_train.txt',col.names = "subject")
 
 
-# 3. Uses descriptive activity names to name the activities in the data set
-# group the activity column of dataSet, re-name lable of levels with activity_levels, and apply it to dataSet.
-act_group <- factor(dataSet$activity)
-levels(act_group) <- activity_labels[,2]
-dataSet$activity <- act_group
+# Merging the training and testing dataset
+
+X <- rbind(x_train, x_test)
+Y <- rbind(y_train, y_test)
+Subject <- rbind(subject_train, subject_test)
+Merged_Data <- cbind(Subject, Y, X)
 
 
-# 5. Creates a second, independent tidy data set with the average of each variable for each activity and each subject. 
+# get measurements on the mean and standard deviation for each measurement.
 
-# check if reshape2 package is installed
-if (!"reshape2" %in% installed.packages()) {
-	install.packages("reshape2")
-}
-library("reshape2")
+Data <- Merged_Data %>% select(subject, n, contains("mean"), contains("std"))
 
-# melt data to tall skinny data and cast means. Finally write the tidy data to the working directory as "tidy_data.txt"
-baseData <- melt(dataSet,(id.vars=c("subject","activity")))
-secondDataSet <- dcast(baseData, subject + activity ~ variable, mean)
-names(secondDataSet)[-c(1:2)] <- paste("[mean of]" , names(secondDataSet)[-c(1:2)] )
-write.table(secondDataSet, "tidy_data.txt", sep = ",")
+# Uses descriptive activity names to name the activities in the data set
+
+Data$n <- activity_labels[Data$n, 2]
+
+# Appropriately labels the data set with descriptive variable names.
+
+# WILL GET the names of the columns in an array
+name.new <- names(Data)
+# replace the foolowing symbol with ""
+name.new <- gsub("[(][)]", "", name.new)
+# replace start with t with TimeDomain
+name.new <- gsub("^t", "TimeDomain_", name.new)
+name.new <- gsub("^f", "FrequencyDomain_", name.new)
+name.new <- gsub("Acc", "Accelerometer", name.new)
+name.new <- gsub("Gyro", "Gyroscope", name.new)
+name.new <- gsub("Mag", "Magnitude", name.new)
+name.new <- gsub("-mean-", "_Mean_", name.new)
+name.new <- gsub("-std-", "_StandardDeviation_", name.new)
+name.new <- gsub("-", "_", name.new)
+names(Data) <- name.new
 
 
+
+#getting the data 
+
+FinalData <- Data %>%
+  group_by(subject, activity) %>%
+  summarise_all(funs(mean))
+write.table(Data, "FinalData.txt", row.name=FALSE)
